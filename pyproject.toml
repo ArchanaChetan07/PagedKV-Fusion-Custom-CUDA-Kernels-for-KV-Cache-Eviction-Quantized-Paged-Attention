@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pagedkv-fusion"
+version = "0.1.0"
+description = "Custom CUDA kernels for KV-cache eviction scoring and INT8 quantized paged attention, with a pluggable vLLM backend"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Archana Suresh Patil" }]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+cuda = ["torch>=2.3"]
+dev = ["pytest>=8", "ruff>=0.4"]
+bench = ["torch>=2.3", "pandas", "matplotlib"]
+
+[tool.setuptools.packages.find]
+include = ["pagedkv_fusion*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
