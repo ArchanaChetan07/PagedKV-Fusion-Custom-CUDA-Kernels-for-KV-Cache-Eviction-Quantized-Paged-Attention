@@ -8,30 +8,29 @@ into the CUDA/C++ kernel layer: replacing a host-side eviction heuristic
 with a fused GPU kernel, and adding a quantized paged-attention kernel with
 measured memory/throughput/quality tradeoffs.
 
-**Honesty note up front:** this repo was built in a CPU-only environment.
-Kernel *design*, *reference correctness*, and every CPU-measurable claim
-(quantization error, memory savings) are done and tested. Kernel *execution
-on real hardware* — latency numbers, Nsight profiles, and the vLLM
-end-to-end run — is written and ready to go but has not yet been run on a
-GPU. **[`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md) states
-exactly what's verified vs. pending, with every number labeled by source.**
-Read that before trusting any performance claim about this project.
+**Honesty note up front:** reference-path correctness, quantization quality, and
+memory arithmetic are fully tested on CPU. **CUDA kernels are now built,
+correctness-verified, and benchmarked on real hardware** (NVIDIA T1000, CUDA
+12.5 — see [`docs/VALIDATION_REPORT.md`](docs/VALIDATION_REPORT.md) §7).
+Nsight profiles and in-process vLLM integration remain pending. Every
+performance number in this README links to a labeled source in the validation
+report — read that before citing latency claims.
 
 ## What's here
 
 | Component | Files | Status |
 |---|---|---|
-| **A — Eviction-scoring kernel** | `csrc/eviction_score.cu` | Written; reference-verified; GPU run pending |
-| **B — INT8 paged-attention kernel** | `csrc/quant_paged_attention.cu` | Written; reference-verified; GPU run pending |
+| **A — Eviction-scoring kernel** | `csrc/eviction_score.cu` | ✅ GPU correctness verified; ~3× faster than host at 16K blocks (T1000) |
+| **B — INT8 paged-attention kernel** | `csrc/quant_paged_attention.cu` | ✅ GPU correctness verified; 5–1900× faster than gathered SDPA baseline |
 | **C — vLLM integration** | `integration/vllm/` | Written; not yet run inside vLLM |
 | Reference implementations | `pagedkv_fusion/reference.py`, `quantize.py` | ✅ Tested (CPU) |
-| CPU/GPU dispatch layer | `pagedkv_fusion/ops.py` | ✅ Tested (CPU); CUDA path pending GPU |
-| Test suite | `tests/` | ✅ 14 passed, 3 skipped (torch/GPU-gated) |
-| End-to-end pipeline demo | `scripts/run_end_to_end_demo.py` | ✅ Actually executed — proves the 3 components compose, not just unit-pass |
-| Benchmarks (latency/memory/quality/downstream-proxy) | `benchmarks/` | ✅ CPU-runnable sections executed; GPU speed sections pending |
-| Profiling wrapper | `scripts/profile_kernels.py` | Written; pending Nsight/GPU |
+| CPU/GPU dispatch layer | `pagedkv_fusion/ops.py` | ✅ Tested (CPU + CUDA dispatch) |
+| Test suite | `tests/` | ✅ 26 passed (CPU + GPU kernel gates) |
+| End-to-end pipeline demo | `scripts/run_end_to_end_demo.py` | ✅ Runs on CUDA backend end-to-end |
+| Benchmarks (latency/memory/quality/downstream-proxy) | `benchmarks/` | ✅ CPU + GPU sections executed |
+| Profiling wrapper | `scripts/profile_kernels.py` | ✅ CLI fixed; Nsight blocked on GPU counter permissions (see report) |
 | CI | `.github/workflows/ci.yml` | CPU job runs on every PR; GPU job needs a self-hosted runner |
-| Reproducible CUDA build | `docker/Dockerfile.cuda`, `Makefile` | Written; not built/run here (no Docker/GPU in this sandbox) |
+| Reproducible CUDA build | `docker/Dockerfile.cuda`, `Makefile` | ✅ Built on Windows + CUDA 12.5 |
 
 ## Quickstart
 
@@ -43,11 +42,9 @@ make test
 make demo         # runs eviction -> quantize -> attention as one real pipeline
 ```
 
-This installs and tests the **reference path only** — correct on any
-machine, including yours right now. You'll see `3 skipped`: those are the
-torch- and CUDA-gated tests, skipping because torch/a GPU aren't present,
-not because anything is broken. `make demo` is worth running: it's not a
-unit test, it's the three components actually wired together and executed.
+This installs and tests the **reference path** on any machine. With a CUDA
+toolchain, use `make install-cuda` and `make test-gpu` to build and verify
+the kernels (see below).
 
 ### Building the CUDA kernels (requires an NVIDIA GPU + CUDA toolkit)
 

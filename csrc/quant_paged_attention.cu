@@ -29,6 +29,8 @@
 // v1 constraints (checked in the launcher):
 //   head_dim <= 256, block_size <= 32, head_dim % 32 == 0.
 
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAException.h>
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 

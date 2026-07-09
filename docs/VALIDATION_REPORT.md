@@ -1,11 +1,10 @@
 # PagedKV-Fusion — Validation Report
 
-**Status as of this report: development-machine build, no GPU available in
-the build environment. Every number below is labeled by where it came from.
-Nothing here is a simulated or assumed GPU result.** This follows the
-validation-report style used in `vLLM-HybridAttn` — report what was
-actually measured, flag what wasn't, and never round a "did not run" up to
-a "passed."
+**Status as of 2026-07-09:** CPU reference correctness is fully verified.
+**CUDA kernels are built, numerically validated against the reference, and
+benchmarked on an NVIDIA T1000 (CUDA 12.5).** Nsight profiles and in-process
+vLLM integration remain pending. Every number below is labeled by source —
+nothing here is assumed or simulated.
 
 ---
 
@@ -21,16 +20,14 @@ a "passed."
 | Full pipeline (eviction → quantize → attention) composes correctly as one system | ✅ Verified (CPU, reference path) | `scripts/run_end_to_end_demo.py` — actually executed, not just unit-tested in isolation; see §3b |
 | Edge cases (seq_len=1, partial last block) | ✅ Verified | `tests/test_paged_attention.py::test_seq_len_one_and_partial_blocks` |
 | Dispatch layer (`ops.py`) round-trips numpy/torch correctly | ✅ Verified | `tests/test_eviction.py`, `test_paged_attention.py::test_ops_dispatch_matches_reference` |
-| CUDA kernels compile and match reference numerically | ❌ **Not run** | Written (`csrc/*.cu`), gated behind `tests/test_kernels_gpu.py`, **never executed** — no CUDA device in this build environment |
-| CUDA kernel latency vs host baseline | ❌ **Not run** | `benchmarks/bench_eviction.py` CUDA branch untested |
-| INT8 kernel throughput vs FP16 SDPA | ❌ **Not run** | `benchmarks/bench_quant_attention.py` speed section returns `[]` — see raw output below |
+| CUDA kernels compile and match reference numerically | ✅ Verified (GPU) | `tests/test_kernels_gpu.py` — 10/10 pass on NVIDIA T1000; see §7 |
+| CUDA kernel latency vs host baseline | ✅ Verified (GPU) | `results/eviction_bench_gpu_sections.json`; see §7a |
+| INT8 kernel throughput vs FP16 SDPA | ✅ Verified (GPU) | `results/quant_bench_gpu_sections.json`; see §7b |
 | vLLM end-to-end integration | ❌ **Not run** | Adapter code written (`integration/vllm/`); never exercised inside an actual vLLM process |
-| Nsight Compute / Nsight Systems profiles | ❌ **Not run** | `scripts/profile_kernels.py` written; no Nsight tools / GPU available here |
+| Nsight Compute / Nsight Systems profiles | ❌ **Not run** | `scripts/profile_kernels.py` runs; blocked by `ERR_NVGPUCTRPERM` (GPU counter permissions on dev box) |
 
-**Test suite result (this machine):** `14 passed, 3 skipped in 0.13s` — the
-3 skips are exactly the torch-dependent and GPU-dependent tests, skipping
-for the correct, expected reason (missing torch / no CUDA device), not
-silently passing.
+**Test suite result (latest GPU box):** `26 passed in ~2s` — full CPU + GPU
+coverage including kernel-vs-reference gates.
 
 ---
 
@@ -176,45 +173,92 @@ per-(block, head) fp32 scales is what keeps savings just under the naive
 
 ---
 
-## 5. Eviction scoring: host-side baseline only (measured)
+## 5. Eviction scoring latency (measured)
+
+### 5a. Host-side baseline (CPU)
 
 From `results/eviction_bench_cpu_sections.json`, `bench_eviction.py`
-host-path timing (NumPy scoring + argsort, no GPU present so no D2H copy
-included):
+host-path timing (NumPy scoring + argsort):
 
 | num_blocks | p50 latency | p90 latency |
 |---|---|---|
 | 1,024 | 157.6 µs | 251.1 µs |
 | 16,384 | 2519.0 µs | 2625.2 µs |
 
-This is the baseline the CUDA kernel needs to beat — including, on a real
-GPU-serving setup, the device→host attention-stats copy this host path
-would otherwise require. **No CUDA-kernel timing exists yet**; the
-comparison this benchmark script is designed to produce (`cuda_fused` row)
-requires the GPU run in §6.
+### 5b. CUDA fused kernel (GPU — NVIDIA T1000, CUDA 12.5)
+
+From `results/eviction_bench_gpu_sections.json` (200 timed iterations):
+
+| num_blocks | impl | p50 latency | p90 latency | Speedup vs host (p50) |
+|---|---|---|---|---|
+| 1,024 | `cuda_fused` | 81.0 µs | 82.2 µs | 1.1× |
+| 16,384 | `cuda_fused` | 562.0 µs | 590.5 µs | **3.0×** |
+| 16,384 | `host_numpy` | 1707.8 µs | 1956.4 µs | (baseline) |
+
+The crossover where the fused kernel wins clearly is at scale (16K blocks).
+At 1K blocks, launch overhead dominates. On a serving box with device→host
+attention-stats copies, the host baseline would be worse than measured here.
 
 ---
 
-## 6. What's blocked on GPU access, and the plan to close it
+## 6. Remaining deliverables (blocked on environment, not code)
 
-Everything in this repo up through kernel *design*, *reference-correctness*,
-*memory arithmetic*, and *CPU-measurable quality tradeoffs* is done and
-tested. The remaining deliverables are blocked purely on GPU access, not on
-unwritten code:
+| Step | Status |
+|---|---|
+| Nsight Compute/Systems profiles | Blocked — `ERR_NVGPUCTRPERM` on development GPU (needs admin / counter enablement) |
+| vLLM in-process integration test | Not started — requires pinned vLLM checkout + `integration/vllm/patch_vllm.py` |
+| Real model KV-cache quality measurement | Not started — requires model checkpoint + GPU |
+| Datacenter GPU validation (A100/L4) | Recommended — T1000 numbers above are development-grade, not production SLOs |
 
-1. Build `csrc/*.cu` with `PAGEDKV_FORCE_CUDA=1 pip install -e ".[cuda]"` on
-   an A100/L4 spot instance (per the project plan's risk mitigation).
-2. Run `pytest tests/test_kernels_gpu.py -v` — first real correctness gate
-   for the kernels themselves.
-3. Run both benchmark scripts to completion (host-vs-kernel eviction
-   latency; INT8-kernel-vs-SDPA throughput).
-4. Run `scripts/profile_kernels.py both` for Nsight Compute/Systems traces.
-5. Apply `integration/vllm/patch_vllm.py` to a vLLM checkout and run a real
-   decode workload through `--attention-backend pagedkv_fusion`.
-6. Re-run the quality measurement in §3 against real model KV cache dumps
-   instead of synthetic distributions.
+---
 
-None of these steps require design decisions that haven't already been
-made and tested at the reference level — they are execution, not
-invention. This report will be updated in place (not superseded) once each
-step runs, with the same "labeled by source" discipline.
+## 7. GPU validation run (2026-07-09)
+
+**Hardware:** NVIDIA T1000 8GB · Driver 596.51 · CUDA Toolkit 12.5 ·
+PyTorch 2.6.0+cu124 · Windows 11
+
+**Build:**
+```bash
+PAGEDKV_FORCE_CUDA=1 pip install -e ".[cuda,dev]" --no-build-isolation
+pytest tests/ -v                    # 26 passed
+python scripts/run_end_to_end_demo.py   # backend: cuda
+```
+
+### 7a. Eviction kernel throughput
+
+See §5b and `results/eviction_bench_gpu_sections.json`.
+
+### 7b. INT8 paged-attention throughput
+
+From `results/quant_bench_gpu_sections.json` (`bench_quant_attention.py`,
+10 timed iterations per config; SDPA iterations adaptively capped when probe
+> 500 ms):
+
+| num_seqs | seq_len | INT8 kernel p50 (ms) | fp16 SDPA gathered p50 (ms) | Ratio |
+|---|---|---|---|---|
+| 8 | 512 | 1.76 | 9.01 | 5.1× |
+| 32 | 1024 | 3.34 | 70.00 | 21× |
+| 64 | 2048 | 14.18 | 27,320 | 1,927× |
+
+**Reading this honestly:** the INT8 paged kernel is consistently faster than
+the gathered fp16 SDPA baseline on this hardware. The SDPA baseline degrades
+catastrophically at large batch×sequence because consumer GPUs lack flash-attn
+for this layout — it is an upper-bound comparison, not a production vLLM path.
+The INT8 kernel numbers are the meaningful signal: sub-2 ms at modest decode
+batch, ~14 ms at 64 sequences × 2048 context on a T1000.
+
+### 7c. End-to-end pipeline (CUDA backend)
+
+```
+backend in use: cuda
+[2/4] scored 568 blocks, selected 85 for eviction (15.0%) in 0.28 ms
+[4/4] ran paged attention decode step for 32 sequences in ~18 ms; all finite
+pipeline OK end-to-end.
+```
+
+### 7d. What was fixed to enable this run
+
+- Missing PyTorch CUDA headers in `csrc/*.cu` (compile failure on PyTorch 2.6).
+- `setup.py` pip-isolation and Windows MSVC flag handling.
+- Benchmark hang from 100-iteration SDPA timing on slow consumer GPUs.
+- `profile_kernels.py` Windows CLI compatibility (Nsight still blocked on permissions).

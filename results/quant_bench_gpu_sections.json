@@ -1,0 +1,36 @@
+{
+  "hardware": {
+    "gpu": "NVIDIA T1000 8GB",
+    "driver": "596.51",
+    "cuda_toolkit": "12.5",
+    "pytorch": "2.6.0+cu124",
+    "os": "Windows 11"
+  },
+  "speed": [
+    {
+      "num_seqs": 8,
+      "seq_len": 512,
+      "int8_kernel_p50_ms": 1.76,
+      "fp16_sdpa_gathered_p50_ms": 9.01,
+      "iters": 10,
+      "sdpa_iters": 10
+    },
+    {
+      "num_seqs": 32,
+      "seq_len": 1024,
+      "int8_kernel_p50_ms": 3.34,
+      "fp16_sdpa_gathered_p50_ms": 70.00,
+      "iters": 10,
+      "sdpa_iters": 10
+    },
+    {
+      "num_seqs": 64,
+      "seq_len": 2048,
+      "int8_kernel_p50_ms": 14.18,
+      "fp16_sdpa_gathered_p50_ms": 27320.47,
+      "iters": 10,
+      "sdpa_iters": 3
+    }
+  ],
+  "notes": "fp16_sdpa_gathered is a dense gather + torch SDPA upper-bound baseline. On consumer GPUs without flash-attn, SDPA at (64 seqs, 2048 tokens) is pathologically slow; the benchmark adaptively caps SDPA timed iterations when a probe exceeds 500 ms. INT8 paged-kernel numbers are the primary throughput signal."
+}

@@ -62,10 +62,18 @@ torch.cuda.synchronize()
 '''
 
 
-def _require(tool: str):
-    if shutil.which(tool) is None:
+def _require(tool: str) -> str:
+    path = shutil.which(tool)
+    if path is None:
+        # Windows Nsight installs often expose ncu.exe / nsys.exe only.
+        for suffix in (".exe", ".bat"):
+            path = shutil.which(tool + suffix)
+            if path is not None:
+                break
+    if path is None:
         sys.exit(f"ERROR: `{tool}` not found on PATH. Install the Nsight "
                   f"tools (bundled with the CUDA Toolkit) and re-run.")
+    return path
 
 
 def run(driver_src: str, name: str, out_dir: Path, use_nsys: bool):
@@ -74,18 +82,26 @@ def run(driver_src: str, name: str, out_dir: Path, use_nsys: bool):
     script.write_text(driver_src)
 
     if use_nsys:
-        _require("nsys")
+        nsys = _require("nsys")
         out = out_dir / f"{name}.nsys-rep"
-        cmd = ["nsys", "profile", "-o", str(out.with_suffix("")),
-               "--force-overwrite", "true", sys.executable, str(script)]
+        cmd = [nsys, "profile", "-o", str(out.with_suffix("")),
+               "--force-overwrite=true", sys.executable, str(script)]
     else:
-        _require("ncu")
+        ncu = _require("ncu")
         out = out_dir / f"{name}.ncu-rep"
-        cmd = ["ncu", "--set", "full", "-o", str(out.with_suffix("")),
+        cmd = [ncu, "--set", "full", "-o", str(out.with_suffix("")),
                "--force-overwrite", sys.executable, str(script)]
 
     print("running:", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as exc:
+        sys.exit(
+            "ERROR: profiling command failed. On Windows, Nsight Compute often "
+            "requires admin rights or enabling GPU performance counters "
+            "(see https://developer.nvidia.com/ERR_NVGPUCTRPERM). "
+            f"Command: {' '.join(cmd)}"
+        ) from exc
     print(f"wrote {out}")
 
 

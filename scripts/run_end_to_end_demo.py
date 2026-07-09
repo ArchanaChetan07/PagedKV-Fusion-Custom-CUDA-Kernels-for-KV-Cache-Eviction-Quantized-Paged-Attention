@@ -53,8 +53,9 @@ def main():
     ap.add_argument("--seed", type=int, default=2026)
     args = ap.parse_args()
 
-    print(f"backend in use: {ops.backend_in_use()}  "
-          f"(expect 'reference' without a CUDA build+device)")
+    backend = ops.backend_in_use()
+    print(f"backend in use: {backend}  "
+          f"(expect 'cuda' after `make install-cuda`, else 'reference')")
     rng = np.random.default_rng(args.seed)
 
     # --- Step 1: build a synthetic serving-step state ----------------------

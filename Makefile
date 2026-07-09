@@ -25,7 +25,7 @@ bench-quality:  ## Downstream-accuracy proxy benchmark (see disclaimer in output
 # --- GPU-only targets (require nvcc + a CUDA device) ------------------------
 
 install-cuda:   ## Build the CUDA extension (fails without CUDA toolchain)
-	PAGEDKV_FORCE_CUDA=1 pip install -e ".[cuda,dev]"
+	PAGEDKV_FORCE_CUDA=1 pip install -e ".[cuda,dev]" --no-build-isolation
 
 test-gpu: install-cuda  ## Kernel-vs-reference correctness on GPU
 	pytest tests/test_kernels_gpu.py -v

@@ -5,6 +5,38 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-07-09
+
+### Fixed
+- CUDA build: add missing `ATen/cuda/CUDAContext.h` and `c10/cuda/CUDAException.h`
+  includes so kernels compile against PyTorch 2.6.
+- `setup.py`: Windows MSVC compile flags (`/O2`), skip hard CUDA errors during
+  pip metadata phase, support `pip install --no-build-isolation` for CUDA builds.
+- `Makefile`: `install-cuda` uses `--no-build-isolation` so torch is available
+  at extension compile time.
+- `bench_quant_attention.py`: progress output, `--speed-iters` flag, adaptive
+  SDPA iteration cap when the fp16 baseline is pathologically slow on consumer GPUs.
+- `profile_kernels.py`: Windows `ncu.exe`/`nsys.exe` discovery, correct
+  `--force-overwrite` syntax, actionable error on `ERR_NVGPUCTRPERM`.
+- `run_end_to_end_demo.py`: backend status message reflects CUDA when built.
+
+### Verified (GPU — NVIDIA T1000 8GB, CUDA 12.5, PyTorch 2.6.0+cu124)
+- `tests/test_kernels_gpu.py`: 10/10 kernel-vs-reference tests pass.
+- Full test suite: 26/26 pass (CPU + GPU).
+- End-to-end demo runs on CUDA backend.
+- Eviction kernel: ~3× faster than host baseline at 16,384 blocks (p50 562 µs vs
+  1,708 µs). See `results/eviction_bench_gpu_sections.json`.
+- INT8 paged attention: 1.8–14 ms p50 vs 9–27,320 ms gathered SDPA baseline
+  depending on batch/sequence length. See `results/quant_bench_gpu_sections.json`.
+- Evidence and reproduction steps updated in `docs/VALIDATION_REPORT.md` §7.
+
+### Known gaps (unchanged)
+- Nsight Compute profiles not collected (`ERR_NVGPUCTRPERM` on development GPU).
+- vLLM integration untested inside an actual vLLM process.
+- Downstream-quality benchmark remains a synthetic proxy, not real perplexity.
+
+## [0.1.0] — initial release
+
 ### Added
 - Component A: fused CUDA eviction-scoring kernel (`csrc/eviction_score.cu`)
   + NumPy reference implementation + correctness tests.
@@ -27,14 +59,3 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   Makefile, Dockerfile for reproducible CUDA builds.
 - `docs/VALIDATION_REPORT.md` — every performance/quality claim labeled by
   what was actually measured vs. what's pending GPU access.
-
-### Known gaps (tracked in docs/VALIDATION_REPORT.md)
-- Kernels have never been compiled or run on a GPU in this development
-  environment — `tests/test_kernels_gpu.py` and the GPU sections of the
-  benchmarks are written but unexecuted.
-- No Nsight profiles collected yet.
-- vLLM integration untested inside an actual vLLM process; no vLLM
-  version/commit pinned yet.
-- Downstream-quality benchmark is a synthetic classification proxy, not
-  real model perplexity (requires a GPU + model checkpoint download,
-  neither available here).

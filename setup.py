@@ -8,11 +8,25 @@ toolchain can never silently ship a reference-only wheel).
 """
 
 import os
+import sys
 
 from setuptools import setup
 
 ext_modules = []
 cmdclass = {}
+
+
+def _compile_args() -> dict[str, list[str]]:
+    if sys.platform == "win32":
+        return {
+            "cxx": ["/O2"],
+            "nvcc": ["-O3", "--use_fast_math", "-lineinfo"],
+        }
+    return {
+        "cxx": ["-O3"],
+        "nvcc": ["-O3", "--use_fast_math", "-lineinfo"],
+    }
+
 
 def _try_cuda_ext():
     try:
@@ -31,20 +45,30 @@ def _try_cuda_ext():
             "csrc/eviction_score.cu",
             "csrc/quant_paged_attention.cu",
         ],
-        extra_compile_args={
-            "cxx": ["-O3"],
-            "nvcc": ["-O3", "--use_fast_math", "-lineinfo"],  # -lineinfo for ncu source view
-        },
+        extra_compile_args=_compile_args(),
     )
     return [ext], {"build_ext": BuildExtension}
+
+
+def _is_metadata_only_invocation() -> bool:
+    # pip/setuptools may import setup.py before torch is installed.
+    return any(
+        token in sys.argv
+        for token in (
+            "egg_info",
+            "dist_info",
+            "get_requires_for_build_wheel",
+            "get_requires_for_build_editable",
+        )
+    )
 
 
 exts, cc = _try_cuda_ext()
 if exts:
     ext_modules, cmdclass = exts, cc
-elif os.environ.get("PAGEDKV_FORCE_CUDA") == "1":
+elif os.environ.get("PAGEDKV_FORCE_CUDA") == "1" and not _is_metadata_only_invocation():
     raise RuntimeError("PAGEDKV_FORCE_CUDA=1 but torch/CUDA toolchain unavailable")
-else:
+elif not _is_metadata_only_invocation():
     print("[pagedkv-fusion] torch+CUDA not found: installing reference-only package")
 
 setup(ext_modules=ext_modules, cmdclass=cmdclass)

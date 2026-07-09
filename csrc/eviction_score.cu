@@ -19,6 +19,8 @@
 //    device-side torch.topk on the score vector (already GPU-resident), so
 //    the full evict decision never touches the host.
 
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAException.h>
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 

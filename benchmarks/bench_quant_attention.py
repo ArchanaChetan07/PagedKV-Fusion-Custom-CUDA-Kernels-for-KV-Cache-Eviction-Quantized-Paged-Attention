@@ -97,7 +97,7 @@ def _sdpa_gathered(qf, kf, vf, num_seqs, seq_len, num_heads, num_kv_heads, head_
         qf[:, :, None, :].transpose(1, 2), kg.transpose(1, 2), vg.transpose(1, 2))
 
 
-def measure_speed(iters=100):
+def measure_speed(iters=20):
     """INT8 kernel vs fp16 SDPA baseline. GPU only; returns [] elsewhere."""
     if torch is None:
         return []
@@ -114,6 +114,7 @@ def measure_speed(iters=100):
 
     rows = []
     for num_seqs, seq_len in [(8, 512), (32, 1024), (64, 2048)]:
+        print(f"  speed: ({num_seqs} seqs, {seq_len} tokens) ...", flush=True)
         num_heads, num_kv_heads, head_dim, bs = 32, 8, 128, 16
         n_blk = num_seqs * ((seq_len + bs - 1) // bs)
         k = torch.randn(n_blk, bs, num_kv_heads, head_dim)
@@ -140,8 +141,18 @@ def measure_speed(iters=100):
         sdpa_args = (qf, kf, vf, num_seqs, seq_len, num_heads, num_kv_heads, head_dim)
         _sdpa_gathered(*sdpa_args)
         torch.cuda.synchronize()
+        t_probe = time.perf_counter()
+        _sdpa_gathered(*sdpa_args)
+        torch.cuda.synchronize()
+        sdpa_probe_ms = (time.perf_counter() - t_probe) * 1e3
+        # SDPA can be orders of magnitude slower than the paged kernel on
+        # consumer GPUs without flash-attn; cap timed iterations so the
+        # benchmark finishes in reasonable wall time.
+        sdpa_iters = iters
+        if sdpa_probe_ms > 500:
+            sdpa_iters = max(3, min(iters, int(5000 / sdpa_probe_ms)))
         ts_base = []
-        for _ in range(iters):
+        for _ in range(sdpa_iters):
             t0 = time.perf_counter()
             _sdpa_gathered(*sdpa_args)
             torch.cuda.synchronize()
@@ -151,13 +162,20 @@ def measure_speed(iters=100):
             "num_seqs": num_seqs, "seq_len": seq_len,
             "int8_kernel_p50_ms": statistics.median(ts),
             "fp16_sdpa_gathered_p50_ms": statistics.median(ts_base),
+            "iters": iters,
+            "sdpa_iters": sdpa_iters,
         })
+        print(f"    int8 p50={rows[-1]['int8_kernel_p50_ms']:.2f} ms, "
+              f"sdpa p50={rows[-1]['fp16_sdpa_gathered_p50_ms']:.2f} ms",
+              flush=True)
     return rows
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path("results/quant_bench.json"))
+    ap.add_argument("--speed-iters", type=int, default=20,
+                    help="timed iterations per speed config (SDPA baseline can be slow)")
     args = ap.parse_args()
 
     mem_cfgs = [
@@ -165,10 +183,11 @@ def main():
         dict(num_blocks=16384, block_size=16, num_kv_heads=8, head_dim=128),
         dict(num_blocks=16384, block_size=16, num_kv_heads=40, head_dim=128), # 13B MHA
     ]
+    print("measuring memory + quality ...", flush=True)
     report = {
         "memory": measure_memory(mem_cfgs),
         "quality": measure_quality(),
-        "speed": measure_speed(),
+        "speed": measure_speed(iters=args.speed_iters),
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2))

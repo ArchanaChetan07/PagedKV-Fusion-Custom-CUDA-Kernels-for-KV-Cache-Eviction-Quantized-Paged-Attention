@@ -1,0 +1,49 @@
+{
+  "hardware": {
+    "gpu": "NVIDIA T1000 8GB",
+    "driver": "596.51",
+    "cuda_toolkit": "12.5",
+    "pytorch": "2.6.0+cu124",
+    "os": "Windows 11"
+  },
+  "config": {
+    "num_blocks": [1024, 16384],
+    "block_size": 16,
+    "iters": 200
+  },
+  "results": [
+    {
+      "impl": "host_numpy",
+      "num_blocks": 1024,
+      "iters": 200,
+      "p50_us": 90.75,
+      "p90_us": 114.74,
+      "mean_us": 100.80
+    },
+    {
+      "impl": "cuda_fused",
+      "num_blocks": 1024,
+      "iters": 200,
+      "p50_us": 81.00,
+      "p90_us": 82.20,
+      "mean_us": 88.63
+    },
+    {
+      "impl": "host_numpy",
+      "num_blocks": 16384,
+      "iters": 200,
+      "p50_us": 1707.75,
+      "p90_us": 1956.37,
+      "mean_us": 1753.01
+    },
+    {
+      "impl": "cuda_fused",
+      "num_blocks": 16384,
+      "iters": 200,
+      "p50_us": 562.00,
+      "p90_us": 590.46,
+      "mean_us": 602.57
+    }
+  ],
+  "notes": "cuda_fused includes device-side eviction_scores + topk with no host round-trip. host_numpy baseline on this GPU box still uses CPU NumPy scoring (no D2H copy in the timed loop)."
+}

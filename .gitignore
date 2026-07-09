@@ -30,6 +30,8 @@ venv/
 # explicitly with a different name — see results/README.md)
 results/*.json
 !results/eviction_bench_cpu_sections.json
+!results/eviction_bench_gpu_sections.json
 !results/quant_bench_cpu_sections.json
+!results/quant_bench_gpu_sections.json
 !results/downstream_proxy_cpu.json
 results/profiles/
