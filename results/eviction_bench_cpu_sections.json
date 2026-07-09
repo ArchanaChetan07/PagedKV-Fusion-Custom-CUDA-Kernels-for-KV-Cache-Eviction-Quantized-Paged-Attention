@@ -1,0 +1,29 @@
+{
+  "config": {
+    "num_blocks": [
+      1024,
+      16384
+    ],
+    "block_size": 16,
+    "iters": 50,
+    "out": "/tmp/eviction_bench.json"
+  },
+  "results": [
+    {
+      "impl": "host_numpy",
+      "num_blocks": 1024,
+      "iters": 50,
+      "p50_us": 157.57500000290747,
+      "p90_us": 251.11449999712931,
+      "mean_us": 178.999199999339
+    },
+    {
+      "impl": "host_numpy",
+      "num_blocks": 16384,
+      "iters": 50,
+      "p50_us": 2518.997500004616,
+      "p90_us": 2625.2202000080165,
+      "mean_us": 2553.634539998768
+    }
+  ]
+}

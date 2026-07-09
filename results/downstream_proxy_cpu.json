@@ -1,0 +1,65 @@
+{
+  "disclaimer": "Synthetic nearest-prototype classification proxy, NOT real perplexity. Measures whether INT8 quantization flips the attention output's nearest-concept decision relative to FP32. Real perplexity requires a GPU + real model checkpoint; see docs/VALIDATION_REPORT.md for status.",
+  "results": [
+    {
+      "num_trials": 2000,
+      "num_concepts": 20,
+      "seq_len": 16,
+      "noise_std": 0.05,
+      "fp32_accuracy": 1.0,
+      "int8_accuracy": 1.0,
+      "accuracy_delta": 0.0,
+      "fp32_vs_int8_disagreement_rate": 0.0
+    },
+    {
+      "num_trials": 2000,
+      "num_concepts": 20,
+      "seq_len": 16,
+      "noise_std": 0.3,
+      "fp32_accuracy": 1.0,
+      "int8_accuracy": 1.0,
+      "accuracy_delta": 0.0,
+      "fp32_vs_int8_disagreement_rate": 0.0
+    },
+    {
+      "num_trials": 2000,
+      "num_concepts": 20,
+      "seq_len": 16,
+      "noise_std": 0.8,
+      "fp32_accuracy": 0.6285,
+      "int8_accuracy": 0.6265,
+      "accuracy_delta": -0.0020000000000000018,
+      "fp32_vs_int8_disagreement_rate": 0.0055
+    },
+    {
+      "num_trials": 2000,
+      "num_concepts": 20,
+      "seq_len": 64,
+      "noise_std": 0.05,
+      "fp32_accuracy": 1.0,
+      "int8_accuracy": 1.0,
+      "accuracy_delta": 0.0,
+      "fp32_vs_int8_disagreement_rate": 0.0
+    },
+    {
+      "num_trials": 2000,
+      "num_concepts": 20,
+      "seq_len": 64,
+      "noise_std": 0.3,
+      "fp32_accuracy": 1.0,
+      "int8_accuracy": 1.0,
+      "accuracy_delta": 0.0,
+      "fp32_vs_int8_disagreement_rate": 0.0
+    },
+    {
+      "num_trials": 2000,
+      "num_concepts": 20,
+      "seq_len": 64,
+      "noise_std": 0.8,
+      "fp32_accuracy": 0.9695,
+      "int8_accuracy": 0.9695,
+      "accuracy_delta": 0.0,
+      "fp32_vs_int8_disagreement_rate": 0.001
+    }
+  ]
+}

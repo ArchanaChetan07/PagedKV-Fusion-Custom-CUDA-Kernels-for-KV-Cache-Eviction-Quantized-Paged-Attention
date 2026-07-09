@@ -1,0 +1,46 @@
+{
+  "memory": [
+    {
+      "num_blocks": 4096,
+      "block_size": 16,
+      "num_kv_heads": 8,
+      "head_dim": 128,
+      "fp16_MiB": 256.0,
+      "int8_MiB": 128.25,
+      "savings_pct": 49.90234375
+    },
+    {
+      "num_blocks": 16384,
+      "block_size": 16,
+      "num_kv_heads": 8,
+      "head_dim": 128,
+      "fp16_MiB": 1024.0,
+      "int8_MiB": 513.0,
+      "savings_pct": 49.90234375
+    },
+    {
+      "num_blocks": 16384,
+      "block_size": 16,
+      "num_kv_heads": 40,
+      "head_dim": 128,
+      "fp16_MiB": 5120.0,
+      "int8_MiB": 2565.0,
+      "savings_pct": 49.90234375
+    }
+  ],
+  "quality": [
+    {
+      "distribution": "gaussian_unit",
+      "rmse": 0.002385753905400634,
+      "max_abs": 0.01605445146560669,
+      "out_std": 0.23264631628990173
+    },
+    {
+      "distribution": "heavy_tail_x8",
+      "rmse": 0.31243300437927246,
+      "max_abs": 3.5737786293029785,
+      "out_std": 7.020642280578613
+    }
+  ],
+  "speed": []
+}

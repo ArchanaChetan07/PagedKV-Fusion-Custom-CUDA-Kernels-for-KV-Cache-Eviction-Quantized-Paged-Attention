@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Runs on every PR / push, no GPU required: reference implementations,
+  # dispatch layer, quantization math, package build. This is the job that
+  # gates merges — the GPU job augments it but a GPU-less contributor's PR
+  # is still fully validated by this job alone.
+  cpu-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package (reference-only, no CUDA toolchain here)
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check pagedkv_fusion tests benchmarks integration scripts
+
+      - name: Run CPU test suite
+        run: pytest tests/ -v --durations=10
+
+      - name: Verify CUDA-only tests skip cleanly (not silently erroring)
+        run: |
+          pytest tests/test_kernels_gpu.py -v | tee /tmp/gpu_test_log.txt
+          grep -q "skipped" /tmp/gpu_test_log.txt
+
+  # Builds the CUDA extension and runs the kernel-vs-reference GPU tests.
+  # Requires a self-hosted runner with a GPU + CUDA toolkit; see
+  # docs/VLLM_INTEGRATION.md and README "Reproducing on your own GPU" for
+  # setup. This job is expected to be unavailable on forks without a
+  # configured runner — cpu-tests above is what protects `main`.
+  gpu-tests:
+    runs-on: [self-hosted, gpu]
+    if: ${{ vars.HAS_GPU_RUNNER == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build CUDA extension
+        run: PAGEDKV_FORCE_CUDA=1 pip install -e ".[cuda,dev]"
+
+      - name: Run full test suite including GPU kernel tests
+        run: pytest tests/ -v --durations=10
+
+      - name: Run benchmarks (smoke — not the full sweep)
+        run: |
+          python benchmarks/bench_eviction.py --num-blocks 4096 --iters 20
+          python benchmarks/bench_quant_attention.py --out /tmp/quant_smoke.json

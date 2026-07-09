@@ -1,0 +1,35 @@
+# Reproducible CUDA build/test environment for PagedKV-Fusion.
+#
+# NOT built or run as part of this repo's development in this environment
+# — no Docker daemon / GPU available in the sandbox this project was
+# written in. This exists so a reviewer with real GPU hardware gets a
+# one-command, dependency-pinned path to §6 of docs/VALIDATION_REPORT.md
+# instead of fighting a local CUDA/torch/nvcc version mismatch.
+#
+# Build:
+#   docker build -f docker/Dockerfile.cuda -t pagedkv-fusion:cuda .
+# Run kernel tests:
+#   docker run --rm --gpus all pagedkv-fusion:cuda make test-gpu
+# Run benchmarks:
+#   docker run --rm --gpus all pagedkv-fusion:cuda make bench test-gpu profile
+
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+# Pinned toolchain: keep this in sync with whatever GPU generation you
+# validate on (see docs/VALIDATION_REPORT.md "Reproducing on your own GPU").
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    TORCH_CUDA_ARCH_LIST="8.0;8.6;9.0"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 python3-pip python3-dev git make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+COPY . /workspace
+
+# torch pulled in via the [cuda] extra; matches the CUDA 12.4 base image.
+RUN pip3 install --no-cache-dir --upgrade pip \
+    && PAGEDKV_FORCE_CUDA=1 pip3 install --no-cache-dir -e ".[cuda,dev,bench]"
+
+CMD ["make", "test-gpu"]
